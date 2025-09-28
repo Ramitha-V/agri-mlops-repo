@@ -32,7 +32,7 @@ jobs:
 
       # --- This is the new testing step ---
       - name: 'Run Automated Tests'
-        run: pytest
+        run: PYTHONPATH=. pytest
       # ------------------------------------
 
       - name: 'Pull Data with DVC'
