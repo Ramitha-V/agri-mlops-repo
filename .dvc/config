@@ -1,0 +1,4 @@
+[core]
+    remote = azurestorage
+['remote "azurestorage"']
+    url = azure://dvc-storage
