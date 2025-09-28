@@ -29,16 +29,12 @@ jobs:
           python-version: '3.9'
       - name: 'Install Dependencies'
         run: pip install -r requirements.txt
-
-      # --- This is the new testing step ---
-      - name: 'Run Automated Tests'
-        run: PYTHONPATH=. pytest
-      # ------------------------------------
-
-      - name: 'Pull Data with DVC'
+      - name: 'Pull Data & Model with DVC'
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
-        run: dvc pull data/crop_yield.csv.dvc -v
+        run: dvc pull -v
+      - name: 'Run Automated Tests'
+        run: PYTHONPATH=. pytest
       - name: 'Train the Model'
         run: python src/train.py
       - name: 'Track and Push Model with DVC'
