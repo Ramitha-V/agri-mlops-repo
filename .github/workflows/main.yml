@@ -1,0 +1,84 @@
+name: CI/CD with Cloud Training
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: "AgriMLOpsRG"
+  ACR_NAME: "agrimlopsregistry3882"
+  WEBAPP_NAME: "agri-yield-app-4607"  
+  IMAGE_NAME: "agri-mlops-project"
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    outputs:
+      model_version: ${{ steps.commit.outputs.commit_hash }}
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v4
+      - name: 'Set up Python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: 'Install Dependencies'
+        run: pip install -r requirements.txt
+      - name: 'Pull Data with DVC'
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: dvc pull data/Agricultural_Crop_Yield.csv.dvc -v
+      - name: 'Train the Model'
+        run: python src/train.py
+      - name: 'Track and Push Model with DVC'
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: |
+          dvc add models/crop_yield_predictor.pkl
+          dvc push
+      - name: 'Commit DVC changes'
+        id: commit
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add models/crop_yield_predictor.pkl.dvc
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "feat: Train and version new model"
+            git push
+          else
+            echo "No model changes to commit."
+          fi
+          echo "commit_hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.train.outputs.model_version }}
+      - name: 'Pull Model & Data with DVC'
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: dvc pull -v
+      - name: 'Log in to Azure CLI'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: 'Log in to Azure Container Registry'
+        run: az acr login --name ${{ env.ACR_NAME }}
+      - name: 'Build and Push Docker Image'
+        run: |
+          docker build . --file Dockerfile \
+            --tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest \
+            --build-arg AZURE_STORAGE_CONNECTION_STRING=${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }} --all-tags
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.WEBAPP_NAME }}
+          images: '${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}'
