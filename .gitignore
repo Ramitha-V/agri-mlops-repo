@@ -13,3 +13,6 @@ __pycache__/
 # IDE folders
 .vscode/
 .idea/
+
+# Ignore large model files
+*.pkl
