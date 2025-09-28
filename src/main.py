@@ -3,19 +3,48 @@ from pydantic import BaseModel
 import joblib
 import pandas as pd
 
-app = FastAPI(title="Crop Yield Prediction API")
-model = joblib.load('models/crop_yield_predictor.pkl')
+# Initialize the app
+app = FastAPI(title="Crop Yield Prediction API", version="2.0")
 
+# Load the trained model pipeline
+pipeline = joblib.load('models/crop_yield_pipeline.pkl')
+
+# Define the input data model to match the training script
 class CropFeatures(BaseModel):
-    area: float
-    production: float
+    Crop: str
+    Crop_Year: int
+    Season: str
+    State: str
+    Area: float
+    Annual_Rainfall: float
+    Fertilizer: float
+    Pesticide: float
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "Crop": "Rice",
+                "Crop_Year": 2024,
+                "Season": "Kharif",
+                "State": "Maharashtra",
+                "Area": 100.0,
+                "Annual_Rainfall": 1200.5,
+                "Fertilizer": 5000.0,
+                "Pesticide": 150.0
+            }
+        }
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the Crop Yield Prediction API!"}
+    """A simple endpoint to check if the API is live."""
+    return {"message": "Welcome to the Crop Yield Prediction API! Visit /docs for more info."}
 
 @app.post("/predict")
 def predict_yield(features: CropFeatures):
-    df = pd.DataFrame([[features.area, features.production]], columns=['Area_in_hectares', 'Production_in_tonnes'])
-    prediction = model.predict(df)[0]
-    return {"predicted_yield_tonnes_per_hectare": prediction}
+    """Predicts crop yield based on agricultural features."""
+    
+    df = pd.DataFrame([features.dict()])
+
+    prediction = pipeline.predict(df)[0]
+    
+    return {"predicted_yield": prediction}
