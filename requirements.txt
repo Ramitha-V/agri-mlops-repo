@@ -5,3 +5,6 @@ pandas
 joblib
 dvc[azure]
 python-dotenv
+gunicorn
+pytest
+httpx
