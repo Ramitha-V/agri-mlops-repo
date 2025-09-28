@@ -29,7 +29,7 @@ jobs:
       - name: 'Pull Data with DVC'
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
-        run: dvc pull data/Agricultural_Crop_Yield.csv.dvc -v
+        run: dvc pull data/crop_yield.csv.dvc -v
       - name: 'Train the Model'
         run: python src/train.py
       - name: 'Track and Push Model with DVC'
