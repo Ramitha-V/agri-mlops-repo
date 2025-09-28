@@ -12,6 +12,9 @@ env:
   WEBAPP_NAME: "agri-yield-app-4607"
   IMAGE_NAME: "agri-mlops-project"
 
+permissions:
+  contents: write
+
 jobs:
   train:
     runs-on: ubuntu-latest
@@ -36,14 +39,14 @@ jobs:
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
         run: |
-          dvc add models/crop_yield_pipeline.pkl   # <-- Corrected filename
+          dvc add models/crop_yield_pipeline.pkl
           dvc push
       - name: 'Commit DVC changes'
         id: commit
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add models/crop_yield_pipeline.pkl.dvc # <-- Corrected filename
+          git add models/crop_yield_pipeline.pkl.dvc
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "feat: Train and version new model"
             git push
