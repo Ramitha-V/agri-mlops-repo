@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from pantic import BaseModel
+from pydantic import BaseModel
 import joblib
 import pandas as pd
 from fastapi.middleware.cors import CORSMiddleware # <--- Import this
