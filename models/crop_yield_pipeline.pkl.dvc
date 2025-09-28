@@ -1,0 +1,5 @@
+outs:
+- md5: b3010827e677c4a4f7929d6ff7827322
+  size: 140642842
+  hash: md5
+  path: crop_yield_pipeline.pkl
