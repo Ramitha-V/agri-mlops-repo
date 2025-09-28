@@ -63,16 +63,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.train.outputs.model_version }}
-
-      # --- ADD THESE TWO STEPS ---
       - name: 'Set up Python'
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
       - name: 'Install Dependencies'
         run: pip install -r requirements.txt
-      # ---------------------------
-
       - name: 'Pull Model & Data with DVC'
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
@@ -84,11 +80,13 @@ jobs:
       - name: 'Log in to Azure Container Registry'
         run: az acr login --name ${{ env.ACR_NAME }}
       - name: 'Build and Push Docker Image'
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
         run: |
           docker build . --file Dockerfile \
             --tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest \
-            --build-arg AZURE_STORAGE_CONNECTION_STRING=${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+            --secret id=azure_connection_string,env=AZURE_STORAGE_CONNECTION_STRING
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }} --all-tags
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v2
