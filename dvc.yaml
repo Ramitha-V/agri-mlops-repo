@@ -1,0 +1,19 @@
+metrics:
+  - metrics.json
+
+params:
+  - params.yaml
+
+stages:
+  train:
+    cmd: python src/train.py
+    deps:
+      - src/train.py
+      - data/crop_yield.csv
+    params:
+      - data_ingestion.test_size
+      - model_building.n_estimators
+      - model_building.max_features
+      - model_building.random_state
+    outs:
+      - models/crop_yield_pipeline.pkl

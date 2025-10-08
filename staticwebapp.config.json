@@ -1,0 +1,16 @@
+{
+  "routes": [
+    {
+      "route": "/api/*",
+      "proxy": {
+        "backendUri": "https://agri-yield-app-4607.azurewebsites.net/{*}",
+        "rewrite": {
+          "path": {
+            "from": "/api",
+            "to": ""
+          }
+        }
+      }
+    }
+  ]
+}

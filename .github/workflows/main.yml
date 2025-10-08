@@ -1,0 +1,97 @@
+name: CI/CD with Cloud Training
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_experiments:
+        type: boolean
+        description: 'Run hyperparameter grid search?'
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  RESOURCE_GROUP: "AgriMLOpsRG"
+  ACR_NAME: "agrimlopsregistry3882"
+  WEBAPP_NAME: "agri-yield-app-4607"
+  IMAGE_NAME: "agri-mlops-project"
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 'Set up Python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: 'Install Dependencies'
+        run: pip install -r requirements.txt
+      - name: 'Install jq'
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_experiments == true }}
+        run: sudo apt-get install -y jq
+      - name: 'Pull Data & Model with DVC'
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: dvc pull -v
+      - name: 'Run Automated Tests'
+        run: PYTHONPATH=. pytest
+      - name: 'Run Hyperparameter Experiments'
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_experiments == true }}
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: |
+          for n_est in 100 150 200 250; do
+            for max_feat in 0.7 0.8 0.9 1.0; do
+              dvc exp run --queue --set-param "model_building.n_estimators=$n_est" --set-param "model_building.max_features=$max_feat"
+            done
+          done
+          dvc exp run --run-all --jobs 2
+      - name: 'Reproduce Pipeline (Standard Run)'
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_experiments == false) }}
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: |
+          dvc repro
+          dvc push
+      - name: 'Promote Best Model to Main'
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_experiments == true }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          BEST_EXP=$(dvc exp show --no-pager --json | jq -r 'sort_by(."metrics.json".r2_score) | reverse | .[0].name')
+          echo "Best experiment found: $BEST_EXP"
+          if [ -n "$BEST_EXP" ]; then
+            dvc exp apply $BEST_EXP
+            if [ -n "$(git status --porcelain)" ]; then
+              git add .
+              git commit -m "feat(bot): Promote champion model $BEST_EXP [ci skip]"
+              git push
+            fi
+          fi
+      - name: 'Log in to Azure CLI'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: 'Log in to Azure Container Registry'
+        run: az acr login --name ${{ env.ACR_NAME }}
+      - name: 'Build and Push Docker Image'
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: |
+          docker build . --file Dockerfile --secret id=azure_connection_string,env=AZURE_STORAGE_CONNECTION_STRING \
+            --tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --tag ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }} --all-tags
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ env.WEBAPP_NAME }}
+          images: '${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}'
