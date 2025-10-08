@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+scikit-learn
+pandas
+joblib
+dvc[azure]
+python-dotenv
+gunicorn
+pytest
+httpx
+PyYAML

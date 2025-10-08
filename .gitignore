@@ -1,0 +1,19 @@
+# Virtual Environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# DVC cache and local config (IMPORTANT FOR SECRETS)
+.dvc/cache
+.dvc/tmp
+.dvc/config.local
+
+# IDE folders
+.vscode/
+.idea/
+
+# Large data and model files
+*.csv
+*.pkl
